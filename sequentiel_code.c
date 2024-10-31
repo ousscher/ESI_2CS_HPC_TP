@@ -8,7 +8,7 @@
 #define MATCH_SCORE 1
 #define MISMATCH_SCORE -1
 #define GAP_PENALTY -2
-#define MAX_SIZE 550001
+
 
 void calculate_similarity_matrix(char* X, char* Y, int lenX, int lenY, int** S) {
     for (int i = 0; i <= lenX; i++) {
