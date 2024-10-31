@@ -9,7 +9,7 @@
 #define MATCH_SCORE 1
 #define MISMATCH_SCORE -1
 #define GAP_PENALTY -2
-#define NUM_THREADS 16 
+#define NUM_THREADS 2
 
 typedef struct { 
     int thread_id;  
@@ -125,6 +125,7 @@ void read_sequence_from_file(const char* filename, char** sequence, int* length)
     //trouver la taille du fichier
     fseek(file, 0, SEEK_END); 
     *length = ftell(file);
+    printf("Taille du fichier %s : %d\n", filename, *length);
     rewind(file); 
 
     *sequence = (char*)malloc((*length + 1) * sizeof(char)); 
@@ -161,16 +162,18 @@ int main() {
     gettimeofday(&start, NULL);
     calculate_similarity_matrix_parallel(X, Y, lenX, lenY, S);
     gettimeofday(&end, NULL);
-    traceback(S, X, Y, lenX, lenY);
+    // traceback(S, X, Y, lenX, lenY);
     double time_spent = (end.tv_sec - start.tv_sec) * 1.0 + (end.tv_usec - start.tv_usec) / 1e6; // Calcul du temps écoulé
     printf("Temps d'exécution (parallèle) : %f secondes\n", time_spent);
 
+    // print_matrix(lenX, lenY, S);
+    traceback(S, X, Y, lenX, lenY);
     for (int i = 0; i <= lenX; i++) {
         free(S[i]);
     }
     free(S);
-    // free(X); 
-    // free(Y); 
+    free(X); 
+    free(Y); 
 
     return 0;
 }
