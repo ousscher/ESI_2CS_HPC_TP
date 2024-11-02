@@ -126,7 +126,7 @@ int main() {
     
     double time_spent = (end.tv_sec - start.tv_sec) * 1.0 + (end.tv_usec - start.tv_usec) / 1e6; 
 
-    print_matrix(lenX, lenY, S);
+    // print_matrix(lenX, lenY, S);
     traceback(S, X, Y, lenX, lenY);
     printf("Temps d'exécution : %f secondes\n", time_spent);
     for (int i = 0; i <= lenX; i++) {
