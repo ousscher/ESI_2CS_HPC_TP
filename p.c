@@ -4,10 +4,10 @@
 #include <sys/time.h>
 #include <math.h>
 
-#define GAP_PENALTY -1
-#define MATCH_SCORE 2
+#define MATCH_SCORE 1
 #define MISMATCH_SCORE -1
-#define NUM_THREADS 4
+#define GAP_PENALTY -2
+#define NUM_THREADS 8
 
 typedef struct {
     char* X;
@@ -15,7 +15,8 @@ typedef struct {
     int lenX;
     int lenY;
     int** S;
-    int diag;
+    int start_diag;
+    int end_diag;
 } ThreadData;
 
 void* calculate_diagonal(void* arg) {
@@ -23,16 +24,17 @@ void* calculate_diagonal(void* arg) {
     char* X = data->X;
     char* Y = data->Y;
     int** S = data->S;
-    int diag = data->diag;
 
-    for (int i = 1; i <= diag - 1; i++) {
-        int j = diag - i;  // Calculer j à partir de diag
-        if (j < 1 || j > data->lenY || i < 1 || i > data->lenX) continue;  // Vérifier les limites
+    for (int diag = data->start_diag; diag <= data->end_diag; diag++) {
+        for (int i = 1; i <= diag - 1; i++) {
+            int j = diag - i;  
+            if (j < 1 || j > data->lenY || i < 1 || i > data->lenX) continue; 
 
-        int match = S[i - 1][j - 1] + ((X[i - 1] == Y[j - 1]) ? MATCH_SCORE : MISMATCH_SCORE);
-        int del = S[i - 1][j] + GAP_PENALTY;
-        int insert = S[i][j - 1] + GAP_PENALTY;
-        S[i][j] = fmax(fmax(match, del), insert);
+            int match = S[i - 1][j - 1] + ((X[i - 1] == Y[j - 1]) ? MATCH_SCORE : MISMATCH_SCORE);
+            int del = S[i - 1][j] + GAP_PENALTY;
+            int insert = S[i][j - 1] + GAP_PENALTY;
+            S[i][j] = fmax(fmax(match, del), insert);
+        }
     }
 
     return NULL;
@@ -49,24 +51,36 @@ void calculate_similarity_matrix(char* X, char* Y, int lenX, int lenY, int** S) 
     pthread_t threads[NUM_THREADS];
     ThreadData threadData[NUM_THREADS];
 
-    for (int diag = 2; diag <= lenX + lenY; diag++) {
-        // Créer les threads pour chaque diagonale
-        for (int t = 0; t < NUM_THREADS; t++) {
-            threadData[t].X = X;
-            threadData[t].Y = Y;
-            threadData[t].lenX = lenX;
-            threadData[t].lenY = lenY;
-            threadData[t].S = S;
-            threadData[t].diag = diag;
-            pthread_create(&threads[t], NULL, calculate_diagonal, (void*)&threadData[t]);
+    int total_diags = lenX + lenY - 1;
+    
+    int blocks_per_thread[NUM_THREADS] = {1, 2, 3, 4, 5, 6, 7, 8}; // Définir le nombre de blocs que chaque thread va traiter
+
+    for (int thread_id = 0; thread_id < NUM_THREADS; thread_id++) {
+        int start_diag = (thread_id == 0) ? 2 : (threadData[thread_id - 1].end_diag + 1);
+        int end_diag = start_diag + blocks_per_thread[thread_id] - 1;
+
+        // Assurer que end_diag ne dépasse pas total_diags
+        if (end_diag > total_diags) {
+            end_diag = total_diags;
         }
 
-        // Attendre que tous les threads aient terminé pour cette diagonale
-        for (int t = 0; t < NUM_THREADS; t++) {
-            pthread_join(threads[t], NULL);
-        }
+        threadData[thread_id].X = X;
+        threadData[thread_id].Y = Y;
+        threadData[thread_id].lenX = lenX;
+        threadData[thread_id].lenY = lenY;
+        threadData[thread_id].S = S;
+        threadData[thread_id].start_diag = start_diag;
+        threadData[thread_id].end_diag = end_diag;
+
+        pthread_create(&threads[thread_id], NULL, calculate_diagonal, (void*)&threadData[thread_id]);
+    }
+
+    // Attendre que tous les threads aient terminé
+    for (int thread_id = 0; thread_id < NUM_THREADS; thread_id++) {
+        pthread_join(threads[thread_id], NULL);
     }
 }
+
 void print_matrix(int lenX, int lenY, int** S) {
     for (int i = 0; i <= lenX; i++) {
         for (int j = 0; j <= lenY; j++) {
@@ -124,7 +138,6 @@ void read_sequence_from_file(const char* filename, char** sequence, int* length)
         fprintf(stderr, "Erreur : Impossible d'ouvrir le fichier %s\n", filename);
         exit(1);
     }
-    //trouver la taille du fichier
     fseek(file, 0, SEEK_END); 
     *length = ftell(file);
     printf("Taille du fichier %s : %d\n", filename, *length);
@@ -147,11 +160,6 @@ int main() {
     int lenX, lenY; 
     read_sequence_from_file("X.txt", &X, &lenX);
     read_sequence_from_file("Y.txt", &Y, &lenY);
-    // char X[] = "AGCTGACGTAAGCTAGCTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";  
-    // char Y[] = "GCTAGCAGTAGCAGTACGTAATTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT";  
-    // int lenX = sizeof(X) / sizeof(X[0]) - 1; 
-    // int lenY = sizeof(Y) / sizeof(Y[0]) - 1; 
-
 
     int** S = (int**)malloc((lenX + 1) * sizeof(int*));
     for (int i = 0; i <= lenX; i++) {
@@ -164,7 +172,8 @@ int main() {
     gettimeofday(&end, NULL);
 
     double time_spent = (end.tv_sec - start.tv_sec) * 1.0 + (end.tv_usec - start.tv_usec) / 1e6; 
-        traceback(S, X, Y, lenX, lenY);
+    print_matrix(lenX, lenY, S);
+    traceback(S, X, Y, lenX, lenY);
 
     printf("Temps d'exécution : %f secondes\n", time_spent);
 
