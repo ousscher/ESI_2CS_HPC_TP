@@ -1,7 +1,7 @@
 import random
 
-length_X = 500
-length_Y = 500
+length_X = 100
+length_Y = 100
 def generate_sequence(length):
     return ''.join(random.choice('ATCG') for _ in range(length))
 with open("X.txt", "w") as file_X:

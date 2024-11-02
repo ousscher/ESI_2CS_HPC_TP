@@ -1,83 +1,86 @@
-#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <time.h>
+#include <pthread.h>
 #include <sys/time.h>
 
 #define MATCH_SCORE 1
 #define MISMATCH_SCORE -1
 #define GAP_PENALTY -2
-#define NUM_THREADS 2
 
-typedef struct { 
-    int thread_id;  
-    int start_i;
-    int end_i;
-    int lenX;
-    int lenY;
+typedef struct {
     char* X;
     char* Y;
     int** S;
+    int lenX;
+    int lenY;
+    int startCol;
+    int endCol;
+    int row; 
 } ThreadData;
 
-void* calculate_wavefront(void* arg) {
+void* calculate_column(void* arg) {
     ThreadData* data = (ThreadData*)arg;
+    char* X = data->X;
+    char* Y = data->Y;
+    int** S = data->S;
 
-    for (int d = 1; d <= data->lenX + data->lenY; d++) {
-        for (int i = data->start_i; i <= data->end_i; i++) {
-            int j = d - i;
-            if (j < 1 || j > data->lenY) continue;
-
-            int match = data->S[i - 1][j - 1] + ((data->X[i - 1] == data->Y[j - 1]) ? MATCH_SCORE : MISMATCH_SCORE);
-            int del = data->S[i - 1][j] + GAP_PENALTY;
-            int insert = data->S[i][j - 1] + GAP_PENALTY;
-            data->S[i][j] = fmax(fmax(match, del), insert);
-        }
+    for (int j = data->startCol; j <= data->endCol; j++) {
+        int match = S[data->row - 1][j - 1] + ((X[data->row - 1] == Y[j - 1]) ? MATCH_SCORE : MISMATCH_SCORE);
+        int del = S[data->row - 1][j] + GAP_PENALTY;
+        int insert = S[data->row][j - 1] + GAP_PENALTY;
+        S[data->row][j] = fmax(fmax(match, del), insert);
     }
     return NULL;
 }
 
 void calculate_similarity_matrix_parallel(char* X, char* Y, int lenX, int lenY, int** S) {
-    for (int i = 0; i <= lenX; i++) S[i][0] = i * GAP_PENALTY;
-    for (int j = 0; j <= lenY; j++) S[0][j] = j * GAP_PENALTY;
-
-    pthread_t threads[NUM_THREADS];
-    ThreadData thread_data[NUM_THREADS];
-    int chunk_size = lenX / NUM_THREADS;
-
-    for (int t = 0; t < NUM_THREADS; t++) {
-        thread_data[t].thread_id = t; 
-        thread_data[t].start_i = t * chunk_size + 1;
-        thread_data[t].end_i = (t == NUM_THREADS - 1) ? lenX : (t + 1) * chunk_size;
-        thread_data[t].lenX = lenX;
-        thread_data[t].lenY = lenY;
-        thread_data[t].X = X;
-        thread_data[t].Y = Y;
-        thread_data[t].S = S;
-
-        pthread_create(&threads[t], NULL, calculate_wavefront, &thread_data[t]);
+    for (int i = 0; i <= lenX; i++) {
+        S[i][0] = i * GAP_PENALTY;
+    }
+    for (int j = 0; j <= lenY; j++) {
+        S[0][j] = j * GAP_PENALTY;
     }
 
-    for (int t = 0; t < NUM_THREADS; t++) {
-        pthread_join(threads[t], NULL);
+    int num_threads = 8;  
+    pthread_t threads[num_threads];
+    ThreadData thread_data[num_threads];
+
+    for (int i = 1; i <= lenX; i++) {
+        int colsPerThread = (lenY + num_threads - 1) / num_threads; 
+        int startCol; 
+
+        for (int t = 0; t < num_threads; t++) {
+            startCol = t * colsPerThread + 1; 
+            int endCol = fmin((t + 1) * colsPerThread, lenY);
+            if (startCol <= lenY) { 
+                thread_data[t] = (ThreadData){X, Y, S, lenX, lenY, startCol, endCol, i};
+                pthread_create(&threads[t], NULL, calculate_column, (void*)&thread_data[t]);
+            }
+        }
+        for (int t = 0; t < num_threads; t++) {
+            if (startCol <= lenY) { 
+                pthread_join(threads[t], NULL);
+            }
+        }
     }
 }
+
 
 void print_matrix(int lenX, int lenY, int** S) {
     for (int i = 0; i <= lenX; i++) {
         for (int j = 0; j <= lenY; j++) {
-            printf("%3d ", S[i][j]); 
+            printf("%3d ", S[i][j]);
         }
         printf("\n");
     }
 }
 
 void traceback(int** S, char* X, char* Y, int lenX, int lenY) {
-    char* aligned_X = (char*)malloc((lenX + lenY + 1) * sizeof(char)); 
-    char* aligned_Y = (char*)malloc((lenX + lenY + 1) * sizeof(char)); 
-    int index = 0; 
+    char* aligned_X = (char*)malloc((lenX + lenY + 1) * sizeof(char));
+    char* aligned_Y = (char*)malloc((lenX + lenY + 1) * sizeof(char));
+    int index = 0;
 
     int i = lenX;
     int j = lenY;
@@ -100,10 +103,10 @@ void traceback(int** S, char* X, char* Y, int lenX, int lenY) {
         index++;
     }
 
-    aligned_X[index] = '\0'; 
-    aligned_Y[index] = '\0'; 
+    aligned_X[index] = '\0';
+    aligned_Y[index] = '\0';
 
-    printf("Alignement Optimal :\n");
+    printf("Optimal Alignment:\n");
     for (int k = index - 1; k >= 0; k--) {
         printf("%c", aligned_X[k]);
     }
@@ -119,35 +122,27 @@ void traceback(int** S, char* X, char* Y, int lenX, int lenY) {
 void read_sequence_from_file(const char* filename, char** sequence, int* length) {
     FILE* file = fopen(filename, "r");
     if (file == NULL) {
-        fprintf(stderr, "Erreur : Impossible d'ouvrir le fichier %s\n", filename);
+        fprintf(stderr, "Error: Unable to open file %s\n", filename);
         exit(1);
     }
-    //trouver la taille du fichier
-    fseek(file, 0, SEEK_END); 
+    // Determine file size
+    fseek(file, 0, SEEK_END);
     *length = ftell(file);
-    printf("Taille du fichier %s : %d\n", filename, *length);
-    rewind(file); 
+    printf("File size of %s: %d\n", filename, *length);
+    rewind(file);
 
-    *sequence = (char*)malloc((*length + 1) * sizeof(char)); 
+    *sequence = (char*)malloc((*length + 1) * sizeof(char));
     if (*sequence == NULL) {
-        fprintf(stderr, "Erreur : Impossible d'allouer la mémoire\n");
+        fprintf(stderr, "Error: Memory allocation failed\n");
         exit(1);
     }
 
-    fread(*sequence, sizeof(char), *length, file); 
-    (*sequence)[*length] = '\0'; 
+    fread(*sequence, sizeof(char), *length, file);
+    (*sequence)[*length] = '\0';
     fclose(file);
 }
 
-
 int main() {
-
-    // char X[] = "ATA";  
-    // char Y[] = "AGTTA"; 
-    // char X[] = "AGCTGACGTAAGCTAGCTA";  
-    // char Y[] = "GCTAGCAGTAGCAGTACGTA";  
-    // int lenX = sizeof(X) / sizeof(X[0]) - 1; 
-    // int lenY = sizeof(Y) / sizeof(Y[0]) - 1; 
     char *X, *Y;
     int lenX, lenY; 
     read_sequence_from_file("X.txt", &X, &lenX);
@@ -162,18 +157,20 @@ int main() {
     gettimeofday(&start, NULL);
     calculate_similarity_matrix_parallel(X, Y, lenX, lenY, S);
     gettimeofday(&end, NULL);
-    // traceback(S, X, Y, lenX, lenY);
-    double time_spent = (end.tv_sec - start.tv_sec) * 1.0 + (end.tv_usec - start.tv_usec) / 1e6; // Calcul du temps écoulé
-    printf("Temps d'exécution (parallèle) : %f secondes\n", time_spent);
 
+    // Optional: print the S matrix
     // print_matrix(lenX, lenY, S);
     traceback(S, X, Y, lenX, lenY);
+    
+    double time_spent = (end.tv_sec - start.tv_sec) * 1.0 + (end.tv_usec - start.tv_usec) / 1e6; 
+    printf("Execution time (paralel): %f seconds\n", time_spent);
+    
     for (int i = 0; i <= lenX; i++) {
         free(S[i]);
     }
     free(S);
-    free(X); 
-    free(Y); 
+    free(X);
+    free(Y);
 
     return 0;
 }
