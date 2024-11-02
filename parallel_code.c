@@ -159,7 +159,7 @@ int main() {
     gettimeofday(&end, NULL);
 
     // Optional: print the S matrix
-    // print_matrix(lenX, lenY, S);
+    print_matrix(lenX, lenY, S);
     traceback(S, X, Y, lenX, lenY);
     
     double time_spent = (end.tv_sec - start.tv_sec) * 1.0 + (end.tv_usec - start.tv_usec) / 1e6; 

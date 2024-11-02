@@ -1,3 +1,4 @@
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -7,7 +8,7 @@
 #define MATCH_SCORE 1
 #define MISMATCH_SCORE -1
 #define GAP_PENALTY -2
-#define NUM_THREADS 8
+#define NUM_THREADS 2
 
 typedef struct {
     char* X;
@@ -15,8 +16,8 @@ typedef struct {
     int lenX;
     int lenY;
     int** S;
-    int start_diag;
-    int end_diag;
+    int current_diag;
+    pthread_mutex_t* mutex;
 } ThreadData;
 
 void* calculate_diagonal(void* arg) {
@@ -25,10 +26,17 @@ void* calculate_diagonal(void* arg) {
     char* Y = data->Y;
     int** S = data->S;
 
-    for (int diag = data->start_diag; diag <= data->end_diag; diag++) {
+    int diag;
+    while (1) {
+        pthread_mutex_lock(data->mutex);
+        diag = data->current_diag++;
+        pthread_mutex_unlock(data->mutex);
+
+        if (diag > data->lenX + data->lenY - 1) break;
+
         for (int i = 1; i <= diag - 1; i++) {
-            int j = diag - i;  
-            if (j < 1 || j > data->lenY || i < 1 || i > data->lenX) continue; 
+            int j = diag - i;
+            if (j < 1 || j > data->lenY || i < 1 || i > data->lenX) continue;
 
             int match = S[i - 1][j - 1] + ((X[i - 1] == Y[j - 1]) ? MATCH_SCORE : MISMATCH_SCORE);
             int del = S[i - 1][j] + GAP_PENALTY;
@@ -49,36 +57,30 @@ void calculate_similarity_matrix(char* X, char* Y, int lenX, int lenY, int** S) 
     }
 
     pthread_t threads[NUM_THREADS];
-    ThreadData threadData[NUM_THREADS];
+    ThreadData threadData;
+    threadData.X = X;
+    threadData.Y = Y;
+    threadData.lenX = lenX;
+    threadData.lenY = lenY;
+    threadData.S = S;
+    threadData.current_diag = 2; 
+    pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+    threadData.mutex = &mutex;
 
-    int total_diags = lenX + lenY - 1;
-    
-    int blocks_per_thread[NUM_THREADS] = {1, 2, 3, 4, 5, 6, 7, 8}; // Définir le nombre de blocs que chaque thread va traiter
-
-    for (int thread_id = 0; thread_id < NUM_THREADS; thread_id++) {
-        int start_diag = (thread_id == 0) ? 2 : (threadData[thread_id - 1].end_diag + 1);
-        int end_diag = start_diag + blocks_per_thread[thread_id] - 1;
-
-        // Assurer que end_diag ne dépasse pas total_diags
-        if (end_diag > total_diags) {
-            end_diag = total_diags;
-        }
-
-        threadData[thread_id].X = X;
-        threadData[thread_id].Y = Y;
-        threadData[thread_id].lenX = lenX;
-        threadData[thread_id].lenY = lenY;
-        threadData[thread_id].S = S;
-        threadData[thread_id].start_diag = start_diag;
-        threadData[thread_id].end_diag = end_diag;
-
-        pthread_create(&threads[thread_id], NULL, calculate_diagonal, (void*)&threadData[thread_id]);
+    for (int i = 0; i < NUM_THREADS; i++) {
+        pthread_create(&threads[i], NULL, calculate_diagonal, (void*)&threadData);
     }
 
-    // Attendre que tous les threads aient terminé
-    for (int thread_id = 0; thread_id < NUM_THREADS; thread_id++) {
-        pthread_join(threads[thread_id], NULL);
+    for (int i = 0; i < NUM_THREADS; i++) {
+        pthread_join(threads[i], NULL);
     }
+
+    int match = S[lenX - 1][lenY - 1] + ((X[lenX - 1] == Y[lenY - 1]) ? MATCH_SCORE : MISMATCH_SCORE);
+    int del = S[lenX - 1][lenY] + GAP_PENALTY;
+    int insert = S[lenX][lenY - 1] + GAP_PENALTY;
+    S[lenX][lenY] = fmax(fmax(match, del), insert);
+
+    pthread_mutex_destroy(&mutex);
 }
 
 void print_matrix(int lenX, int lenY, int** S) {
@@ -154,7 +156,6 @@ void read_sequence_from_file(const char* filename, char** sequence, int* length)
     fclose(file);
 }
 
-
 int main() {
     char *X, *Y;
     int lenX, lenY; 
@@ -175,7 +176,7 @@ int main() {
     print_matrix(lenX, lenY, S);
     traceback(S, X, Y, lenX, lenY);
 
-    printf("Temps d'exécution : %f secondes\n", time_spent);
+    printf("Temps d'exécution : %.6f secondes\n", time_spent);
 
     for (int i = 0; i <= lenX; i++) {
         free(S[i]);
@@ -183,6 +184,5 @@ int main() {
     free(S);
     free(X);
     free(Y);
-
     return 0;
 }
