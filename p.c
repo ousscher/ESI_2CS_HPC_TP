@@ -32,7 +32,7 @@ void* calculate_diagonal(void* arg) {
         diag = data->current_diag++;
         pthread_mutex_unlock(data->mutex);
 
-        if (diag > data->lenX + data->lenY - 1) break;
+        if (diag > data->lenX + data->lenY) break;
 
         for (int i = 1; i <= diag - 1; i++) {
             int j = diag - i;
@@ -74,12 +74,6 @@ void calculate_similarity_matrix(char* X, char* Y, int lenX, int lenY, int** S) 
     for (int i = 0; i < NUM_THREADS; i++) {
         pthread_join(threads[i], NULL);
     }
-
-    int match = S[lenX - 1][lenY - 1] + ((X[lenX - 1] == Y[lenY - 1]) ? MATCH_SCORE : MISMATCH_SCORE);
-    int del = S[lenX - 1][lenY] + GAP_PENALTY;
-    int insert = S[lenX][lenY - 1] + GAP_PENALTY;
-    S[lenX][lenY] = fmax(fmax(match, del), insert);
-
     pthread_mutex_destroy(&mutex);
 }
 
