@@ -53,7 +53,7 @@ void calculate_similarity_matrix_parallel(char* X, char* Y, int lenX, int lenY, 
 
         for (int t = 0; t < num_threads; t++) {
             startCol = t * colsPerThread + 1; 
-            int endCol = fmin((t + 1) * colsPerThread, lenY);
+            int endCol = fmin((t + 1) * colsPerThread, lenY); 
             if (startCol <= lenY) { 
                 thread_data[t] = (ThreadData){X, Y, S, lenX, lenY, startCol, endCol, i};
                 pthread_create(&threads[t], NULL, calculate_column, (void*)&thread_data[t]);
@@ -159,7 +159,7 @@ int main() {
     gettimeofday(&end, NULL);
 
     // Optional: print the S matrix
-    print_matrix(lenX, lenY, S);
+    // print_matrix(lenX, lenY, S);
     traceback(S, X, Y, lenX, lenY);
     
     double time_spent = (end.tv_sec - start.tv_sec) * 1.0 + (end.tv_usec - start.tv_usec) / 1e6; 
