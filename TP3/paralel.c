@@ -6,7 +6,7 @@
 #include <pthread.h>
 
 #define PI 3.14159265358979323846
-#define NUM_THREADS 4  // Nombre de threads à utiliser
+#define NUM_THREADS 4  
 
 // Structure pour passer les arguments aux threads
 typedef struct {
@@ -41,11 +41,8 @@ void* computeDFTThread(void* args) {
 void computeDFTParallel(double* signal, int N, double complex* result) {
     pthread_t threads[NUM_THREADS];
     ThreadArgs thread_args[NUM_THREADS];
-    
-    // Calculer combien de points chaque thread va traiter
     int points_per_thread = N / NUM_THREADS;
     
-    // Créer et lancer les threads
     for (int i = 0; i < NUM_THREADS; i++) {
         thread_args[i].signal = signal;
         thread_args[i].result = result;
@@ -59,7 +56,6 @@ void computeDFTParallel(double* signal, int N, double complex* result) {
         }
     }
     
-    // Attendre que tous les threads terminent
     for (int i = 0; i < NUM_THREADS; i++) {
         pthread_join(threads[i], NULL);
     }

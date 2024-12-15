@@ -18,8 +18,7 @@ void computeDFT(double* signal, int N, double complex* result) {
     }
 }
 int main() {
-    // Taille du signal
-    int N = 10240; // Augmentez cette valeur pour un signal plus complexe
+    int N = 10240; 
     double* signal = (double*)malloc(N * sizeof(double));
     double complex* result = (double complex*)malloc(N * sizeof(double complex));
 
