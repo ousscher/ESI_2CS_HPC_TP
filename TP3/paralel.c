@@ -1,70 +1,69 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include <complex.h>
-#include <sys/time.h>
 #include <pthread.h>
+#include <sys/time.h>
 
 #define PI 3.14159265358979323846
-#define NUM_THREADS 4  
 
-// Structure pour passer les arguments aux threads
 typedef struct {
-    double* signal;
-    double complex* result;
+    double real;
+    double imag;
+} ComplexNumber;
+
+typedef struct {
+    ComplexNumber* signal;
+    ComplexNumber* result;
+    int N;
     int start;
     int end;
-    int N;
-} ThreadArgs;
+} ThreadData;
 
-void* computeDFTThread(void* args) {
-    ThreadArgs* targs = (ThreadArgs*)args;
-    double* signal = targs->signal;
-    double complex* result = targs->result;
-    int start = targs->start;
-    int end = targs->end;
-    int N = targs->N;
-
-    // Chaque thread calcule une partie de la DFT
-    for (int k = start; k < end; k++) {
-        double complex sum = 0.0 + 0.0 * I;
-        for (int n = 0; n < N; n++) {
-            double angle = 2 * PI * k * n / N;
-            sum += signal[n] * cexp(-I * angle);
-        }
-        result[k] = sum;
-    }
-
-    pthread_exit(NULL);
+ComplexNumber multiplyComplex(ComplexNumber a, ComplexNumber b) {
+    ComplexNumber result;
+    result.real = a.real * b.real - a.imag * b.imag;
+    result.imag = a.real * b.imag + a.imag * b.real;
+    return result;
 }
 
-void computeDFTParallel(double* signal, int N, double complex* result) {
-    pthread_t threads[NUM_THREADS];
-    ThreadArgs thread_args[NUM_THREADS];
-    int points_per_thread = N / NUM_THREADS;
-    
-    for (int i = 0; i < NUM_THREADS; i++) {
-        thread_args[i].signal = signal;
-        thread_args[i].result = result;
-        thread_args[i].N = N;
-        thread_args[i].start = i * points_per_thread;
-        thread_args[i].end = (i == NUM_THREADS - 1) ? N : (i + 1) * points_per_thread;
-        
-        if (pthread_create(&threads[i], NULL, computeDFTThread, &thread_args[i]) != 0) {
-            printf("Erreur lors de la création du thread %d\n", i);
-            exit(1);
+ComplexNumber addComplex(ComplexNumber a, ComplexNumber b) {
+    ComplexNumber result;
+    result.real = a.real + b.real;
+    result.imag = a.imag + b.imag;
+    return result;
+}
+
+void* computeDFTThread(void* arg) {
+    ThreadData* data = (ThreadData*)arg;
+    ComplexNumber* signal = data->signal;
+    ComplexNumber* result = data->result;
+    int N = data->N;
+
+    for (int k = data->start; k < data->end; k++) {
+        result[k].real = 0;
+        result[k].imag = 0;
+
+        for (int n = 0; n < N; n++) {
+            double angle = 2 * PI * k * n / N;
+            ComplexNumber exponential = {
+                .real = cos(angle),
+                .imag = -sin(angle)
+            };
+
+            ComplexNumber temp = multiplyComplex(signal[n], exponential);
+            result[k] = addComplex(result[k], temp);
         }
     }
-    
-    for (int i = 0; i < NUM_THREADS; i++) {
-        pthread_join(threads[i], NULL);
-    }
+
+    return NULL;
 }
 
 int main() {
-    int N = 10240;
-    double* signal = (double*)malloc(N * sizeof(double));
-    double complex* result = (double complex*)malloc(N * sizeof(double complex));
+    int N = 10240;  // Taille du signal
+    int numThreads = 8; 
+
+    ComplexNumber* signal = (ComplexNumber*)malloc(N * sizeof(ComplexNumber));
+    ComplexNumber* result = (ComplexNumber*)malloc(N * sizeof(ComplexNumber));
 
     if (signal == NULL || result == NULL) {
         printf("Erreur d'allocation mémoire.\n");
@@ -73,24 +72,44 @@ int main() {
 
     printf("Création du signal complexe...\n");
     for (int i = 0; i < N; i++) {
-        double real_part = sin(2 * PI * 50 * i / N);
-        double imag_part = cos(2 * PI * 120 * i / N);
-        signal[i] = real_part + imag_part * I;
+        signal[i].real = sin(2 * PI * 50 * i / N);
+        signal[i].imag = cos(2 * PI * 120 * i / N);
     }
 
-    printf("Calcul de la DFT parallèle...\n");
+    printf("Calcul de la DFT parallèle avec %d threads...\n", numThreads);
     struct timeval start, end;
     gettimeofday(&start, NULL);
-    
-    computeDFTParallel(signal, N, result);
-    
-    gettimeofday(&end, NULL);
-    double time_spent = (end.tv_sec - start.tv_sec) * 1.0 + (end.tv_usec - start.tv_usec) / 1e6;
-    printf("Temps d'exécution : %f secondes\n", time_spent);
 
-    printf("Résultats de la DFT (partiels) :\n");
+    pthread_t threads[numThreads];
+    ThreadData threadData[numThreads];
+
+    int chunkSize = N / numThreads;
+    for (int t = 0; t < numThreads; t++) {
+        threadData[t].signal = signal;
+        threadData[t].result = result;
+        threadData[t].N = N;
+        threadData[t].start = t * chunkSize;
+        threadData[t].end = (t == numThreads - 1) ? N : (t + 1) * chunkSize;
+
+        pthread_create(&threads[t], NULL, computeDFTThread, &threadData[t]);
+    }
+
+    for (int t = 0; t < numThreads; t++) {
+        pthread_join(threads[t], NULL);
+    }
+
+    gettimeofday(&end, NULL);
+    double time_spent = (end.tv_sec - start.tv_sec) * 1.0 + 
+                        (end.tv_usec - start.tv_usec) / 1e6;
+
+    printf("Temps d'ex\u00e9cution parall\u00e8le : %f secondes\n", time_spent);
+    printf("R\u00e9sultats de la DFT (partiels) :\n");
     for (int k = 0; k < 10; k++) {
-        printf("k = %d : Magnitude = %.5f, Phase = %.5f radians\n", k, cabs(result[k]), carg(result[k]));
+        double magnitude = sqrt(result[k].real * result[k].real + 
+                                result[k].imag * result[k].imag);
+        double phase = atan2(result[k].imag, result[k].real);
+        printf("k = %d : Magnitude = %.5f, Phase = %.5f radians\n", 
+               k, magnitude, phase);
     }
 
     free(signal);

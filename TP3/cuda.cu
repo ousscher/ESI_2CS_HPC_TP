@@ -9,7 +9,6 @@
 #define PI 3.14159265358979323846
 #define BLOCK_SIZE 256
 
-// Structure pour stocker les nombres complexes sur CPU
 typedef struct {
     double real;
     double imag;
@@ -50,7 +49,6 @@ void computeDFT_CUDA(ComplexNumber* signal, int N, ComplexNumber* result) {
     double *d_signal_real, *d_signal_imag;
     cuDoubleComplex *d_result;
     
-    // Extraction des parties réelle et imaginaire du signal
     double* signal_real = (double*)malloc(N * sizeof(double));
     double* signal_imag = (double*)malloc(N * sizeof(double));
     
@@ -58,8 +56,6 @@ void computeDFT_CUDA(ComplexNumber* signal, int N, ComplexNumber* result) {
         signal_real[i] = signal[i].real;
         signal_imag[i] = signal[i].imag;
     }
-    
-    // Allocation de la mémoire sur le GPU
     checkCudaError(cudaMalloc((void**)&d_signal_real, N * sizeof(double)), 
                   "Allocation signal réel");
     checkCudaError(cudaMalloc((void**)&d_signal_imag, N * sizeof(double)), 
