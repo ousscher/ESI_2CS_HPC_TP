@@ -11,7 +11,6 @@ typedef struct {
     double imag;
 } ComplexNumber;
 
-// Fonction pour multiplier deux nombres complexes
 ComplexNumber multiplyComplex(ComplexNumber a, ComplexNumber b) {
     ComplexNumber result;
     result.real = a.real * b.real - a.imag * b.imag;
@@ -19,7 +18,6 @@ ComplexNumber multiplyComplex(ComplexNumber a, ComplexNumber b) {
     return result;
 }
 
-// Fonction pour additionner deux nombres complexes
 ComplexNumber addComplex(ComplexNumber a, ComplexNumber b) {
     ComplexNumber result;
     result.real = a.real + b.real;
@@ -27,7 +25,6 @@ ComplexNumber addComplex(ComplexNumber a, ComplexNumber b) {
     return result;
 }
 
-// Fonction pour calculer la TFD de manière séquentielle
 void computeDFT(ComplexNumber* signal, int N, ComplexNumber* result) {
     for (int k = 0; k < N; k++) {
         result[k].real = 0;
@@ -42,17 +39,15 @@ void computeDFT(ComplexNumber* signal, int N, ComplexNumber* result) {
                 .imag = -sin(angle)
             };
             
-            // Multiplication avec le signal
             ComplexNumber temp = multiplyComplex(signal[n], exponential);
             
-            // Accumulation du résultat
             result[k] = addComplex(result[k], temp);
         }
     }
 }
 
 int main() {
-    int N = 10240;  // Même taille que dans la version CUDA
+    int N = 10240;  
     ComplexNumber* signal = (ComplexNumber*)malloc(N * sizeof(ComplexNumber));
     ComplexNumber* result = (ComplexNumber*)malloc(N * sizeof(ComplexNumber));
     
