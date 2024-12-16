@@ -63,36 +63,29 @@ void computeDFT_CUDA(ComplexNumber* signal, int N, ComplexNumber* result) {
     checkCudaError(cudaMalloc((void**)&d_result, N * sizeof(cuDoubleComplex)), 
                   "Allocation résultat");
     
-    // Copie des données vers le GPU
     checkCudaError(cudaMemcpy(d_signal_real, signal_real, N * sizeof(double), 
                   cudaMemcpyHostToDevice), "Copie signal réel vers GPU");
     checkCudaError(cudaMemcpy(d_signal_imag, signal_imag, N * sizeof(double), 
                   cudaMemcpyHostToDevice), "Copie signal imaginaire vers GPU");
     
-    // Configuration de la grille et des blocs
     int numBlocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
     dim3 gridDim(numBlocks);
     dim3 blockDim(BLOCK_SIZE);
     
-    // Lancement du kernel
     dftKernel<<<gridDim, blockDim>>>(d_signal_real, d_signal_imag, d_result, N);
     
-    // Vérification des erreurs du kernel
     checkCudaError(cudaGetLastError(), "Lancement du kernel");
     checkCudaError(cudaDeviceSynchronize(), "Synchronisation du kernel");
     
-    // Copie des résultats vers le CPU
     cuDoubleComplex* h_result = (cuDoubleComplex*)malloc(N * sizeof(cuDoubleComplex));
     checkCudaError(cudaMemcpy(h_result, d_result, N * sizeof(cuDoubleComplex), 
                   cudaMemcpyDeviceToHost), "Copie résultats vers CPU");
     
-    // Conversion des résultats en format ComplexNumber
     for (int i = 0; i < N; i++) {
         result[i].real = h_result[i].x;
         result[i].imag = h_result[i].y;
     }
     
-    // Libération de la mémoire
     free(signal_real);
     free(signal_imag);
     free(h_result);
