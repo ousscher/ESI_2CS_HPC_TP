@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define ROOT 0
 #define CHUNK_SIZE 10
 #define MATRIX_SIZE 100
 #define REQUEST_TAG 999999 // lorsque le processus envoie une requête initiale pour recevoir un chunk
@@ -13,8 +12,7 @@ void slave_process(int rank, int chunksize);
 void init_matrix(int *matrix, int size);
 void print_matrix(int *matrix, int chunk_size, int num_chunks);
 
-int main()
-{
+int main(){
     int rank, num_process;
     int chunksize = CHUNK_SIZE;
 
@@ -23,7 +21,7 @@ int main()
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
     // Processus maître
-    if (rank == ROOT)
+    if (rank == 0)
     {
         master_process(chunksize, num_process);
     }
@@ -37,8 +35,7 @@ int main()
     return 0;
 }
 
-void master_process(int chunksize, int num_process)
-{
+void master_process(int chunksize, int num_process){
     int num_chunks = MATRIX_SIZE / chunksize;
     int data[MATRIX_SIZE];
     int chunk[chunksize];
@@ -71,13 +68,10 @@ void master_process(int chunksize, int num_process)
         }
 
         // Vérifier s'il reste des chunks de données à envoyer
-        if (chunks_sent < num_chunks)
-        {
+        if (chunks_sent < num_chunks){
             MPI_Send(&data[chunks_sent * chunksize], chunksize, MPI_INT, status.MPI_SOURCE, chunks_sent, MPI_COMM_WORLD);
             chunks_sent++;
-        }
-        else
-        {
+        }else{
             MPI_Send(NULL, 0, MPI_INT, status.MPI_SOURCE, FINISH_TAG, MPI_COMM_WORLD);
             active_slaves--;
         }
@@ -95,12 +89,12 @@ void slave_process(int rank, int chunksize)
     MPI_Status status;
 
     // Requête initiale pour demander des données
-    MPI_Send(NULL, 0, MPI_INT, ROOT, REQUEST_TAG, MPI_COMM_WORLD);
+    MPI_Send(NULL, 0, MPI_INT, 0, REQUEST_TAG, MPI_COMM_WORLD);
 
     while (1)
     {
         // Recevoir des données ou un signal de terminaison
-        MPI_Recv(chunk, chunksize, MPI_INT, ROOT, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+        MPI_Recv(chunk, chunksize, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 
         if (status.MPI_TAG == FINISH_TAG)
             break;
@@ -111,7 +105,7 @@ void slave_process(int rank, int chunksize)
             chunk[i] = chunk[i] * chunk[i];
         }
         // Envoyer les données traitées au maître, ce qui constitue également une nouvelle requête de données
-        MPI_Send(chunk, chunksize, MPI_INT, ROOT, status.MPI_TAG, MPI_COMM_WORLD);
+        MPI_Send(chunk, chunksize, MPI_INT, 0, status.MPI_TAG, MPI_COMM_WORLD);
     }
 }
 
